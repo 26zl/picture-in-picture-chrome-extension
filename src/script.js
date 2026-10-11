@@ -12,10 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Some players keep their <video> inside an open shadow root, where document.querySelectorAll cannot see it.
+function findAllVideos() {
+  const videos = Array.from(document.querySelectorAll('video'));
+  if (videos.length > 0) {
+    return videos;
+  }
+  const collect = root => {
+    for (const element of root.querySelectorAll('*')) {
+      if (element.shadowRoot) {
+        videos.push(...element.shadowRoot.querySelectorAll('video'));
+        collect(element.shadowRoot);
+      }
+    }
+  };
+  collect(document);
+  return videos;
+}
+
 function findLargestPlayingVideo() {
-  const videos = Array.from(document.querySelectorAll('video'))
+  const videos = findAllVideos()
     .filter(video => video.readyState != 0)
-    .filter(video => video.disablePictureInPicture == false)
     .sort((v1, v2) => {
       const v1Rect = v1.getClientRects()[0]||{width:0,height:0};
       const v2Rect = v2.getClientRects()[0]||{width:0,height:0};
@@ -30,6 +47,9 @@ function findLargestPlayingVideo() {
 }
 
 async function requestPictureInPicture(video) {
+  // Sites such as Disney+ set disablePictureInPicture on their player. The user asked for PiP
+  // explicitly by triggering this extension, so the hint is cleared before the request.
+  video.disablePictureInPicture = false;
   await video.requestPictureInPicture();
   video.setAttribute('__pip__', true);
   video.addEventListener('leavepictureinpicture', event => {
